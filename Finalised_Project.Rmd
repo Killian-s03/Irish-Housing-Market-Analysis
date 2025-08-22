@@ -1,0 +1,217 @@
+---
+title: "Irish Housing market analysis"
+output: html_document
+date: "2025-03-11"
+---
+
+Libraries
+
+```{r}
+library(tidyverse)
+library(tsibble)
+library(dplyr)
+library(fable)
+library(feasts)
+library(lme4)
+library(gridExtra)
+```
+
+
+Data
+
+```{r}
+AnnualPopulationChange <- read_csv("Datasets/AnnualPopulationChange.csv",show_col_types = F)
+ElectoraDivisions2016 <- read_csv("~/Year4-Semster1/CS460-PROJECT/Datasets/ElectoraDivisions2016.csv",show_col_types = F)
+PPR_Geocode_2012_2017 <- read_csv("~/Year4-Semster1/CS460-PROJECT/Datasets/PPR_Geocode_2012-2017.csv",show_col_types = F)
+PPR_ALL <- read_csv("Datasets/PPR-ALL.csv",locale = locale(encoding = "Windows-1252"),show_col_types = F)
+```
+Data Cleaning for the property price register (Used in majority of analysis)
+
+
+
+```{r}
+Prices_ALL <- PPR_ALL %>% 
+  select(County, `Price (€)`, `Date of Sale (dd/mm/yyyy)`) %>% 
+  rename(Price = `Price (€)`, Date = `Date of Sale (dd/mm/yyyy)`) %>% 
+  mutate(Price = as.numeric(gsub("[^0-9.]", "", Price)),  Year=year(dmy(Date))) %>% 
+  group_by(Year) %>% 
+  summarize(Median_Price = median(Price, na.rm = TRUE)) %>% 
+  filter(Year!=2025)
+View(Prices_ALL)
+```
+
+
+Applying Regions
+```{r}
+Leinster<- c("Carlow", "Dublin", "Kildare", "Kilkenny", "Laois", "Longford", "Louth", "Meath", "Offaly", "Westmeath", "Wexford" , "Wicklow")
+Munster<-c("Clare", "Cork", "Kerry", "Limerick", "Tipperary","Waterford")
+Ulster<-c("Cavan","Donegal","Monaghan")
+Connacht<-c("Galway", "Leitrim", "Mayo", "Roscommon","Sligo")
+Leinster_No_Dublin<- c("Carlow", "Kildare", "Kilkenny", "Laois", "Longford", "Louth", "Meath", "Offaly", "Westmeath", "Wexford" , "Wicklow")
+Province<- c("Leinster","Ulster","Connacht","Munster")
+```
+
+
+
+
+Data cleaning for net Migration figures and house prices
+
+
+```{r}
+##Select only relevant columns
+Prices_ALL <- PPR_ALL %>% 
+  select(County, `Price (€)`, `Date of Sale (dd/mm/yyyy)`) %>% 
+##Rename the columns with difficult to reference names
+  rename(Price = `Price (€)`, Date = `Date of Sale (dd/mm/yyyy)`) %>% 
+  mutate(Price = as.numeric(gsub("[^0-9.]", "", Price)),  Year=year(dmy(Date))) %>% 
+##Group by Year of observation and summarise by yearly median price
+  group_by(Year) %>% 
+  summarize(Median_Price = median(Price, na.rm = TRUE)) %>% 
+  filter(Year!=2025)
+
+##Filter by Net Migration, Remove NA values and filter data from 2010-2024
+annual_net_migration<- AnnualPopulationChange %>% 
+  filter(Component=="Net migration" & !is.na(VALUE) & Year >=2010)
+View(annual_net_migration)
+```
+
+Code to produce the line plots for this analysis
+
+```{r}
+##Plot the line plot for annual net migration
+Annual_net <- ggplot(annual_net_migration, aes(x = Year, y = VALUE)) +
+  geom_point(size = 3, color = "#0072B2", alpha = 0.7) + 
+  geom_smooth(se = FALSE, colour = "#D55E00", linewidth = 1.2, method = "loess") +
+  labs(title = "Annual Net Migration in Ireland",
+    subtitle = "Net migration trends over time", x = "Year",y = "Number of People (in 1000s)") +
+  theme_minimal()
+
+##Plot the line plot for Yearly median house prices
+plot_median <- ggplot(Prices_ALL, aes(x = Year, y = Median_Price)) +
+  geom_point(size = 3, color = "#0072B2", alpha = 0.7) +  
+  geom_smooth(se = FALSE, colour = "#009E73", linewidth = 1.2, method = "loess") +  
+  labs(title = "Median Property Price Trends",subtitle = "Median house prices over time",
+    x = "Year",y = "Price (in 1000s €)")+
+  theme_minimal()
+##Arrange the plots in a side by side grid
+grid.arrange(plot_median,Annual_net,ncol=2)
+  
+```
+
+
+Code for Price disparities boxplot data cleaning
+
+```{r}
+PPR_Box<- PPR_ALL %>% 
+  select(County, `Price (€)`, `Date of Sale (dd/mm/yyyy)`) %>% 
+  rename(Price = `Price (€)`, Date = `Date of Sale (dd/mm/yyyy)`) %>% 
+  mutate(Price = as.numeric(gsub("[^0-9.]", "", Price)),  Year=year(dmy(Date))) %>% 
+##Filter for houses costing less than 500,000
+  filter(Price<500000 & Year==2024) %>% 
+##Assigning a province to each county
+  mutate(Province=case_when(
+    County %in% Leinster ~ "Leinster",
+    County %in% Munster ~ "Munster",
+    County %in% Ulster ~ "Ulster",
+    County %in% Connacht ~ "Connacht"))
+
+View(PPR_Box)
+```
+
+
+
+Code for PPR Box Plot
+
+```{r}
+##Create box plot, reordered based on median house price
+ggplot(PPR_Box,aes(x=Price/1000,y=reorder(County,Price,FUN=median),fill=Province))+
+  geom_boxplot()+
+  labs(title="Comparison of the property prices across each county",
+       y="County",x="Price (Thousands)")
+```
+
+
+
+Tabular Data analysis - Data cleaning
+
+```{r}
+PPR<- PPR_ALL %>% 
+  select(County, `Price (€)`, `Date of Sale (dd/mm/yyyy)`) %>% 
+  rename(Price = `Price (€)`, Date = `Date of Sale (dd/mm/yyyy)`) %>% 
+  mutate(Price = as.numeric(gsub("[^0-9.]", "", Price)),  Year=year(dmy(Date)))
+
+Price_2014<-PPR %>% filter(Year==2014) %>% 
+  select(County,Price) %>% group_by(County) %>% summarise(Price_2014=median(Price))
+Price_2019<-PPR %>% filter(Year==2019) %>% 
+  select(County,Price) %>% group_by(County) %>% summarise(Price_2019=median(Price))
+Price_2024<-PPR %>% filter(Year==2024) %>% 
+  select(County,Price) %>% group_by(County) %>% summarise(Price_2024=median(Price))
+
+PPR2014_2019<- Price_2014 %>% 
+  left_join(Price_2019,by="County")
+
+Price_Comparison<- PPR2014_2019 %>% 
+  left_join(Price_2024,by="County")
+
+View(Price_Comparison)
+```
+
+
+
+Creating table
+
+```{r}
+Percentage_Table <- Price_Comparison %>% 
+  mutate(First_Increase = round(((Price_2019 - Price_2014) / Price_2014) * 100,digits=2),
+         Second_Increase=round(((Price_2024-Price_2019)/Price_2019)*100,digits=2),
+         Overall_Increase=round(((Price_2024-Price_2014)/Price_2014)*100,digits=2))
+Percentage_Table<-Percentage_Table[,c("County","Price_2014","First_Increase","Price_2019","Second_Increase",
+                                      "Price_2024","Overall_Increase")]
+View(Percentage_Table)
+```
+
+
+
+
+Mixed Model analysis- socioeconomic factors
+
+```{r}
+electoral<-ElectoraDivisions2016 %>% 
+  select(ed_name,agedependencyratio,,propthirdlevel,unemploymentratemale,unemploymentratefemale,
+         pobalhpdescription,pobalhpindex2016,county_1)
+##Selecting relevant variables for mixed models analysis
+electoral_all<-electoral %>% 
+  rename(electoral_district="ed_name",
+         Age_Dependency_Rate="agedependencyratio",
+         Proportion_Third_Ed="propthirdlevel",
+         Unemployed_Male="unemploymentratemale",
+         Unemployed_Female="unemploymentratefemale",
+         Pobal_Status="pobalhpdescription",
+         Pobal_Score="pobalhpindex2016",
+         County="county_1")
+
+
+PPR_Geo<-PPR_Geocode_2012_2017
+##Simplifying geocoded data to combine with deprivation data
+PPR_Geo_summary<-PPR_Geo %>% 
+  filter(year==2016) %>% 
+  select(price,electoral_district) %>% 
+  group_by(electoral_district) %>% 
+  summarize(Price=median(price,na.rm=T))
+##Combining deprivation and geocoded PPR by electoral division
+electoral_data<- electoral_all %>% 
+  left_join(PPR_Geo_summary,by="electoral_district") %>% 
+  filter(!is.na(Price)) %>% mutate(Unemployment=(Unemployed_Female+Unemployed_Male)/2)
+
+View(electoral_data)
+```
+
+
+
+Code for creating the model
+
+```{r}
+model1<- lmer(log(Price)~ Pobal_Score + Age_Dependency_Rate + Proportion_Third_Ed+ Unemployment+(1|County),data = electoral_data)
+summary(model1)
+```
+

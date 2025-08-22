@@ -21,8 +21,8 @@ Data
 
 ```{r}
 AnnualPopulationChange <- read_csv("Datasets/AnnualPopulationChange.csv",show_col_types = F)
-ElectoraDivisions2016 <- read_csv("~/Year4-Semster1/CS460-PROJECT/Datasets/ElectoraDivisions2016.csv",show_col_types = F)
-PPR_Geocode_2012_2017 <- read_csv("~/Year4-Semster1/CS460-PROJECT/Datasets/PPR_Geocode_2012-2017.csv",show_col_types = F)
+ElectoraDivisions2016 <- read_csv("Datasets/ElectoraDivisions2016.csv",show_col_types = F)
+PPR_Geocode_2012_2017 <- read_csv("Datasets/PPR_Geocode_2012-2017.csv",show_col_types = F)
 PPR_ALL <- read_csv("Datasets/PPR-ALL.csv",locale = locale(encoding = "Windows-1252"),show_col_types = F)
 ```
 Data Cleaning for the property price register (Used in majority of analysis)
